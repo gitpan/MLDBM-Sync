@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .11;
+$VERSION = .15;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -37,7 +37,7 @@ sub TIEHASH {
 		      'md5_keys' => 0,
 		      'pid' => $$,
 		      'keys' => [],
-		      'db_type' => $MLDBM::UseDB,	   
+		      'db_type' => $MLDBM::UseDB,
 		      'serializer' => $MLDBM::Serializer,
 		     };
 
@@ -103,9 +103,15 @@ sub CLEAR {
 	next unless -e $file;
 	unlink($file) || die("can't unlink file $file: $!");
     }
+    if($self->{lock_num} > 1) {
+	$self->SyncTie; # recreate, not done with it yet
+    }
     $self->unlock;
-    unlink($self->{lock_file});
-
+    if($self->{lock_num} == 0) {
+	# only unlink if we are clear of all the locks
+	unlink($self->{lock_file});
+    }
+    
     $self->{cache} && $self->{cache}->CLEAR;
 
     1;
@@ -230,11 +236,13 @@ sub Lock {
 sub UnLock {
     my $self = shift;
 
-    if($self->{lock_num}-- == 1) {
+    if($self->{lock_num} && $self->{lock_num}-- == 1) {
+	$self->{lock_num} = 0;
 	undef $self->{dbm};
 	flock($self->{'lock_fh'}, $LOCK_UN) || die("can't unlock $self->{'lock_file'}: $!");
 	close($self->{'lock_fh'}) || die("can't close $self->{'lock_file'}");
 	$self->{read_lock} = undef;
+	1;
     } else {
 	1;
     }

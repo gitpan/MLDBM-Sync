@@ -1,11 +1,21 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .15; $DATE = 'TBA';
+
+- API fixes for easier integration with Apache::ASP
+
+- Made $sync_dbm->UnLock() repeatable, with the next
+  $sync_dbm->Lock() still working.
+
 $MODULE = "MLDBM::Sync"; $VERSION = .11; $DATE = '2001/09/12';
 
 ++ Taking module out of BETA.  Been using it in production 
    for 3 months, and in development for 6.
 
+- Bug fix for undefined warning in MLDBM::Sync::SDBM_File
+
 - MLDBM::Sync::SDBM_File STORE() now deletes prior key parts
   before storing the value, which will result in more correct
-  behavior, there was a possible bug here.
+  behavior, there was a possible bug here.  Added a test
+  in t/sdbm_rec_big.t testing for this possible error.
 
 + Deletion of lock file when calling CLEAR(), or %dbm = ()
   Do this after unlock, which _might_ have a race condition
