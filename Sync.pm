@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = 0.23;
+$VERSION = 0.25;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -39,6 +39,7 @@ sub TIEHASH {
 		      'keys' => [],
 		      'db_type' => $MLDBM::UseDB,
 		      'serializer' => $MLDBM::Serializer,
+		      'remove_taint' => $MLDBM::RemoveTaint,
 		     };
 
     $self;
@@ -204,7 +205,10 @@ sub SyncTie {
     my $args = $self->{args};
     local $MLDBM::UseDB = $self->{db_type};
     local $MLDBM::Serializer = $self->{serializer};
+    local $MLDBM::RemoveTaint = $self->{remove_taint};
     $self->{dbm} = tie(%temp_hash, 'MLDBM', @$args) || die("can't tie to MLDBM with args: ".join(',', @$args)."; error: $!");
+
+    $self->{dbm};
 }
 
 #### DOCUMENTED API ################################################################

@@ -1,3 +1,8 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .25; $DATE = '2001/11/11';
+
++ Honors the $MLDBM::RemoveTaint setting when MLDBM::Sync object is created,
+  storing for later creation of the MLDBM tied object
+
 $MODULE = "MLDBM::Sync"; $VERSION = .23; $DATE = '2001/11/08';
 
 + Updated AUTHORS section with perl license reference.
