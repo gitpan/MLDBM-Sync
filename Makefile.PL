@@ -1,6 +1,5 @@
-#!perl
+#!/usr/local/bin/perl
 
-$VERSION_FROM = 'CHANGES';
 use ExtUtils::MakeMaker;
-&WriteMakefile( NAME => "MLDBM::Sync" );
+&WriteMakefile( NAME => "MLDBM::Sync", VERSION_FROM => 'Sync.pm' );
 

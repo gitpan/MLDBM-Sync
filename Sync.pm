@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .19;
+$VERSION = 0.21;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -98,16 +98,25 @@ sub CLEAR {
     my $self = shift;
     
     $self->lock;
+    $self->{dbm}->CLEAR;
     $self->{dbm} = undef;
     # delete the files to free disk space
+    my $unlinked = 0;
     for (@EXT) {
 	my $file = $self->{file}.$_;	
-	next unless -e $file;
-	unlink($file) || die("can't unlink file $file: $!");
+	next if(! -e $file);
+	if(-d $file) {
+	    rmdir($file) || warn("can't unlink dir $file: $!");
+	} else {
+	    unlink($file) || die("can't unlink file $file: $!");
+	}
+
+	$unlinked++;
     }
     if($self->{lock_num} > 1) {
 	$self->SyncTie; # recreate, not done with it yet
     }
+
     $self->unlock;
     if($self->{lock_num} == 0) {
 	# only unlink if we are clear of all the locks
@@ -258,6 +267,16 @@ sub SyncSize {
 	my $file = $self->{file}.$_;	
 	next unless -e $file;
 	$size += (stat($file))[7];
+
+	if(-d $file) {
+	    opendir(DIR, $file) || next;
+	    my @files = readdir(DIR);
+	    for my $dir_file (@files) {
+		next if $dir_file =~ /^[\.]+$/;
+		$size += (stat("$file/$dir_file"))[7];
+	    }
+	    closedir(DIR);
+	}
     }
 
     $size;

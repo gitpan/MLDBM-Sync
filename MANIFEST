@@ -1,0 +1,13 @@
+CHANGES
+MANIFEST
+Makefile.PL
+README
+Sync.pm
+bench/bench_sync.pl
+lib/MLDBM/Sync/SDBM_File.pm
+t/T.pm
+t/cache.t
+t/general.t
+t/key_checksum.t
+t/locks.t
+t/sdbm_big_rec.t

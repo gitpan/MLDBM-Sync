@@ -1,7 +1,12 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .21; $DATE = 'TBA';
+
++ Added support in CLEAR() & SyncSize() for a tie directory
+  based data structure like Tie::TextDir
+
 $MODULE = "MLDBM::Sync"; $VERSION = .19; $DATE = '2001/10/15';
 
 - Fixed keys(%hash), where one of the keys was boolean FALSE
-  like '', or 0.
+  like '', or 0.  Bug found by Elliot Glaysher.
 
 $MODULE = "MLDBM::Sync"; $VERSION = .17; $DATE = '2001/10/11';
 

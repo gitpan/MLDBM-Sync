@@ -19,16 +19,20 @@ use vars qw($opt_cache);
 
 for my $SIZE (50, 500, 5000, 20000, 50000) {
     print "\n=== INSERT OF $SIZE BYTE RECORDS ===\n";
-    for my $DB ('SDBM_File', 'MLDBM::Sync::SDBM_File', 'GDBM_File', 'DB_File') {
+    for my $DB ('SDBM_File', 'MLDBM::Sync::SDBM_File', 'GDBM_File', 'DB_File', 'Tie::TextDir .04') {
 	eval "use $DB";
 	next if $@;
 	if($DB eq 'SDBM_File' and $SIZE > 800) { 
 	    print " (skipping test for SDBM_File 1024 byte limit)\n";
-	    next 
+	    next;
 	};
-	local $MLDBM::UseDB = $DB;
+	my $real_db = $DB;
+	$real_db =~ s/\s+\.\d+$//isg;
+	local $MLDBM::UseDB = $real_db;
+	my $file_suffix = $real_db;
+	$file_suffix =~ s/\W/_/isg;
 	my %mldbm;
-	my $sync = tie(%mldbm, 'MLDBM::Sync', '/tmp/MLDBM_SYNC_BENCH', O_CREAT|O_RDWR, 0666)
+	my $sync = tie(%mldbm, 'MLDBM::Sync', "/tmp/MLDBM_SYNC_BENCH_".$file_suffix, O_CREAT|O_RDWR, 0666)
 	  || die("can't tie to /tmp/bench_mldbm: $!");
 	if($opt_cache) {
 	    $sync->SyncCacheSize('1000K');
