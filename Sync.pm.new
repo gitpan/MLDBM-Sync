@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .05;
+$VERSION = .03;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -35,6 +35,8 @@ sub TIEHASH {
 		      'db_type' => $MLDBM::UseDB,	   
 		      'serializer' => $MLDBM::Serializer,
 		     };
+
+#    open($self->{lock_fh}, ">>$self->{lock_file}") || die("can't open file $fh: $!");
 
     $self;
 }
@@ -186,7 +188,7 @@ sub UnLock {
 
     if($self->{lock_num}-- == 1) {
 	undef $self->{dbm};
-	flock($self->{'lock_fh'}, $LOCK_UN) || die("can't unlock $self->{'lock_file'}: $!");
+	flock($self->{'lock_fh'}, LOCK_UN) || die("can't unlock $self->{'lock_file'}: $!");
 	close($self->{'lock_fh'}) || die("can't close $self->{'lock_file'}");
 	$self->{read_lock} = undef;
     } else {

@@ -1,3 +1,10 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .05; $DATE = 'TBA';
+
++ Simpler use of locking.
+
+- Read locking works on Solaris, had to open file in 
+  read/write mode.  Linux/NT didn't care.
+
 $MODULE = "MLDBM::Sync"; $VERSION = .03; $DATE = 'TBA';
 
 + $dbm_obj->SyncKeysChecksum(1) API documented.
