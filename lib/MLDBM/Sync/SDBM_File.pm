@@ -82,8 +82,9 @@ sub DELETE {
     my $total_rv;
     for my $index (0..($MaxSegments-1)) {
 	my $index_key = _index_key($key, $index);
-	my $rv = $self->SUPER::FETCH($index_key);
+	my $rv = $self->SUPER::FETCH($index_key) || '';
 	$self->SUPER::DELETE($index_key);
+	$total_rv ||= '';
 	$total_rv .= $rv;
 	last if length($rv) < $segment_length;
     }

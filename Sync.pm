@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .07;
+$VERSION = .09;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -104,6 +104,8 @@ sub CLEAR {
 	unlink($file) || die("can't unlink file $file: $!");
     }
     $self->unlock;
+    unlink($self->{lock_file}) 
+      || warn("could not unlink lock file $self->{lock_file}: $!");
 
     $self->{cache} && $self->{cache}->CLEAR;
 

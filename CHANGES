@@ -1,4 +1,14 @@
-$MODULE = "MLDBM::Sync"; $VERSION = .07; $DATE = 'TBA';
+$MODULE = "MLDBM::Sync"; $VERSION = .09; $DATE = 'TBA';
+
++ Deletion of lock file when calling CLEAR(), or %dbm = ()
+  Do this after unlock, which _might_ have a race condition
+  but haven't seen in in heavy load testing... MLDBM::Sync
+  recreates the lock file every time if necessary, so this
+  may not be an issue anyway.
+
+- Bug fix for undefined warning in MLDBM::Sync::SDBM_File
+
+$MODULE = "MLDBM::Sync"; $VERSION = .07; $DATE = '2001/03/18';
 
 + $dbm->SyncCacheSize() API activates 2nd layer RAM cache
   via Tie::Cache with MaxBytes set.
