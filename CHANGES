@@ -1,3 +1,24 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .03; $DATE = 'TBA';
+
++ $dbm_obj->SyncKeysChecksum(1) API documented.
+  New internal format that does not store the original key
+  with keys() & each() throwing errors now if used on this
+  kind of database.
+
++ ReadLock() API added, that does a LOCK_SH internally.
+  Also uses ReadLock() for FETCH and *KEY operations.
+  ** WARNING: one may not ReadLock() and then write to the 
+  dbm, or that will die in an error.  Must UnLock() first.
+  Writes may only occur in a Lock() section, which does a 
+  LOCK_EX internally.
+
++ Better backward compatibility with old SDBM_Files
+  for MLDBM::Sync::SDBM_File, also new format not compatible
+  with .01 format.
+
++ Better test for MLDBM::Sync::SDBM_File, using keys with
+  odd characters.
+
 $MODULE = "MLDBM::Sync"; $VERSION = .01; $DATE = '2/7/2001';
 
 + Initial release with flock concurrent access control to 

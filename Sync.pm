@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .01;
+$VERSION = .03;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -8,10 +8,14 @@ use Data::Dumper;
 use Fcntl qw(:flock);
 use Digest::MD5 qw(md5_hex);
 use strict;
+use Carp qw(confess);
 no strict qw(refs);
-use vars qw($AUTOLOAD @EXT);
+use vars qw($AUTOLOAD @EXT $LOCK_SH $LOCK_EX $LOCK_UN);
 
 @EXT = ('.pag', '.dir', '');
+$LOCK_SH = LOCK_SH;
+$LOCK_EX = LOCK_EX;
+$LOCK_UN = LOCK_UN;
 
 sub TIEHASH {
     my($class, $file, @args) = @_;
@@ -53,25 +57,21 @@ sub AUTOLOAD {
 
     ## CHECKSUM KEYS
     if(defined $key && $self->{md5_keys}) {
-	my $oldkey = $key;
 	$key = $self->SyncChecksum($key);
-	if($func eq 'STORE') {
-	    $value = { 'K' => $oldkey, 'V' => $value };
-	}
     }
 
-    $self->SyncLock;
+    if ($func eq 'FETCH') {
+	$self->read_lock;
+    } else {
+	$self->lock;
+    }
     my $rv;
     if (defined $value) {
 	$rv = $self->{dbm}->$func($key, $value);
     } else {
 	$rv = $self->{dbm}->$func($key);
     }
-    $self->SyncUnLock;
-
-    if(defined $rv && $self->{md5_keys}) {
-	$rv = $rv->{'V'};
-    }
+    $self->unlock;
 
     $rv;
 }
@@ -97,17 +97,17 @@ sub CLEAR {
 sub FIRSTKEY {
     my $self = shift;
 
-    $self->lock;
+    if($self->{md5_keys}) {
+	confess("can't get keys() or each() on MLDBM::Sync database ".
+		"with SyncKeysChecksum(1) set");
+    }
+    
+    $self->read_lock;
     my $key = $self->{dbm}->FIRSTKEY();
     my @keys;
     if(defined $key) {
 	do {
-	    if($self->{md5_keys}) {
-		my $raw_value = $self->{dbm}->FETCH($key);
-		push(@keys, $raw_value->{'K'});
-	    } else {
-		push(@keys, $key);
-	    }
+	    push(@keys, $key);
 	} while($key = $self->{dbm}->NEXTKEY($key));
     }
     $self->{'keys'} = \@keys;
@@ -118,6 +118,12 @@ sub FIRSTKEY {
 
 sub NEXTKEY {
     my $self = shift;
+
+    if($self->{md5_keys}) {
+	confess("can't get keys() or each() on MLDBM::Sync database ".
+		"with SyncKeysChecksum(1) set");
+    }
+    
     my $rv = shift(@{$self->{'keys'}});
 }
 
@@ -141,9 +147,6 @@ sub SyncTie {
 
 #### DOCUMENTED API ################################################################
 
-# sub Lock {}, see above for alias to SyncLock
-# sub UnLock {}, see above for alias to SynUnLock
-
 sub SyncKeysChecksum {
     my($self, $setting) = @_;
     if(defined $setting) {
@@ -153,9 +156,13 @@ sub SyncKeysChecksum {
     }
 }
 
-*lock = *Lock = *SyncLock;
-sub SyncLock {
-    my $self = shift;
+*read_lock = *ReadLock;
+sub ReadLock { shift->Lock($LOCK_SH); }
+
+*lock = *SyncLock = *Lock;
+sub Lock {
+    my($self, $type) = @_;
+    $type ||= $LOCK_EX;
 
     # FORK PROOF... we reinit the lock after a fork automatically this 
     # way since a shared file handle will not produce correct results
@@ -166,23 +173,31 @@ sub SyncLock {
 	open($fh, ">>$fh") || die("can't open file $fh: $!");
 	$self->{pid} = $$;
 	$self->{lock_num} = 0;
+	$self->{lock_type} = undef;
     }
 
     if($self->{lock_num}++ == 0) {
-	flock($self->{'lock'}, LOCK_EX) || die("can't write lock $self->{'lock'}: $!");
+	flock($self->{'lock'}, $type) || die("can't write lock $self->{'lock'}: $!");
+	$self->{lock_type} = $type;
 	$self->SyncTie;
     } else {
-	1;
+	if (($self->{lock_type} eq $LOCK_SH) and ($type eq $LOCK_EX)) {
+	    $self->{lock_num}--; # roll back lock count
+	    # confess here to help developer track this down
+	    confess("can't upgrade lock type from LOCK_SH to LOCK_EX! ".
+		    "this could also happen if you tried to write to the MLDBM ".
+		    "in a critical section locked by ReadLock()");
+	}
     }
 }
 
-*unlock = *UnLock = *SyncUnLock;
-sub SyncUnLock {
+*unlock = *SyncUnLock = *UnLock;
+sub UnLock {
     my $self = shift;
 
     if($self->{lock_num}-- == 1) {
 	undef $self->{dbm};
-	flock($self->{'lock'}, LOCK_UN) || die("can't unlock $self->{'lock'}: $!");
+	flock($self->{'lock'}, $LOCK_UN) || die("can't unlock $self->{'lock'}: $!");
     } else {
 	1;
     }
@@ -215,28 +230,55 @@ __END__
   use MLDBM qw(MLDBM::Sync::SDBM_File);  # use extended SDBM_File, handles values > 1024 bytes
 
   # NORMAL PROTECTED read/write with implicit locks per i/o request
-  tie %cache, 'MLDBM::Sync' [..other DBM args..] or die $!;
+  my $sync_dbm_obj = tie %cache, 'MLDBM::Sync' [..other DBM args..] or die $!;
   $cache{"AAAA"} = "BBBB";
   my $value = $cache{"AAAA"};
 
-  # SERIALIZED PROTECTED read/write with explicity lock for both i/o requests
+  # SERIALIZED PROTECTED read/write with explicit lock for both i/o requests
   my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
   $sync_dbm_obj->Lock;
   $cache{"AAAA"} = "BBBB";
   my $value = $cache{"AAAA"};
   $sync_dbm_obj->UnLock;
+
+  # SERIALIZED PROTECTED read access with explicit read lock for both reads
+  $sync_dbm_obj->ReadLock;
+  my @keys = keys %cache;
+  my $value = $cache{'AAAA'};
+  $sync_dbm_obj->UnLock;
+
+  # KEY CHECKSUMS, for lookups on MD5 checksums on large keys
+  my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
+  $sync_dbm_obj->SyncKeysChecksum(1);
+  my $large_key = "KEY" x 10000;
+  $sync{$large_key} = "LARGE";
+  my $value = $sync{$large_key};
 
 =head1 DESCRIPTION
 
 This module wraps around the MLDBM interface, by handling concurrent
 access to MLDBM databases with file locking, and flushes i/o explicity
-per lock/unlock.  The new Lock()/UnLock() API can be used to serialize
+per lock/unlock.  The new [Read]Lock()/UnLock() API can be used to serialize
 requests logically and improve performance for bundled reads & writes.
 
   my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
+
+  # Write locked critical section
   $sync_dbm_obj->Lock;
-    ... all accesses to DBM LOCK_EX protected, and go to same file handles ...
+    ... all accesses to DBM LOCK_EX protected, and go to same tied file handles
+    $cache{'KEY'} = 'VALUE';
   $sync_dbm_obj->UnLock;
+
+  # Read locked critical section
+  $sync_dbm_obj->ReadLock;
+    ... all read accesses to DBM LOCK_SH protected, and go to same tied files
+    ... WARNING, cannot write to DBM in ReadLock() section, will die()
+    my $value = $cache{'KEY'};
+  $sync_dbm_obj->UnLock;
+
+  # Normal access OK too, without explicity locking
+  $cache{'KEY'} = 'VALUE';
+  my $value = $cache{'KEY'};
 
 MLDBM continues to serve as the underlying OO layer that
 serializes complex data structures to be stored in the databases.
@@ -251,6 +293,93 @@ or get the file MLDBM-Sync-x.xx.tar.gz, unzip, untar and:
   make
   make test
   make install
+
+=head1 LOCKING
+
+The MLDBM::Sync wrapper protects MLDBM databases by locking
+and unlocking around read and write requests to the databases.
+Also necessary is for each new lock to tie() to the database
+internally, untie()'ing when unlocking.  This flushes any
+i/o for the dbm to the operating system, and allows for
+concurrent read/write access to the databases.
+
+Without any extra effort from the developer, an existing 
+MLDBM database will benefit from MLDBM::sync.
+
+  my $dbm_obj = tie %dbm, ...;
+  $dbm{"key"} = "value";
+
+As a write or STORE operation, the above will automatically
+cause the following:
+
+  $dbm_obj->Lock; # also ties
+  $dbm{"key"} = "value";
+  $dbm_obj->UnLock; # also unties
+
+Just so, a read or FETCH operation like:
+
+  my $value = $dbm{"key"};
+
+will really trigger:
+
+  $dbm_obj->ReadLock; # also ties
+  my $value = $dbm{"key"};
+  $dbm_obj->Lock; # also unties
+
+However, these lock operations are expensive because of the 
+underlying tie()/untie() that occurs for i/o flushing, so 
+when bundling reads & writes, a developer may explicitly
+use this API for greater performance:
+
+  # tie once to database, write 100 times
+  $dbm_obj->Lock;
+  for (1..100) {
+    $dbm{$_} = $_ * 100;
+    ...
+  }
+  $dbm_obj->UnLock;
+
+  # only tie once to database, and read 100 times
+  $dbm_obj->ReadLock;
+  for(1..100) {
+    my $value = $dbm{$_};  
+    ...
+  }
+  $dbm_obj->UnLock;
+
+=head1 KEYS CHECKSUM
+
+A common operation on database lookups is checksumming
+the key, prior to the lookup, because the key could be
+very large, and all one really wants is the data it maps
+too.  To enable this functionality automatically with 
+MLDBM::Sync, just:
+
+  my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
+  $sync_dbm_obj->SyncKeysChecksum(1);
+
+ !! WARNING: keys() & each() do not work on these databases
+ !! as of v.03, so the developer will not be fooled into thinking
+ !! the stored key values are meaningful to the calling application 
+ !! and will die() if called.
+ !!
+ !! This behavior could be relaxed in the future.
+ 
+An example of this might be to cache a XSLT conversion,
+which are typically very expensive.  You have the 
+XML data and the XSLT data, so all you do is:
+
+  # $xml_data, $xsl_data are strings
+  my $xslt_output;
+  unless ($xslt_output = $cache{$xml_data.'&&&&'.$xsl_data}) {
+    ... do XSLT conversion here for $xslt_output ...
+    $cache{$xml_data.'&&&&'.xsl_data} = $xslt_output;
+  }
+
+What you save by doing this is having to create HUGE keys
+to lookup on, which no DBM is likely to do efficiently.
+This is the same method that File::Cache uses internally to 
+hash its file lookups in its directories.
 
 =head1 New MLDBM::Sync::SDBM_File
 
@@ -296,34 +425,34 @@ The results for a dual 450 linux 2.2.14, with a ext2 file
 system blocksize 4096 mounted async on a SCSI disk were as follows:
 
  === INSERT OF 50 BYTE RECORDS ===
-  Time for 100 write/read's for  SDBM_File                   0.12 seconds      12288 bytes
-  Time for 100 write/read's for  MLDBM::Sync::SDBM_File      0.14 seconds      12288 bytes
-  Time for 100 write/read's for  GDBM_File                   2.07 seconds      18066 bytes
-  Time for 100 write/read's for  DB_File                     2.48 seconds      20480 bytes
+  Time for 100 writes + 100 reads for  SDBM_File                  0.13 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.15 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  3.33 seconds     18066 bytes
+  Time for 100 writes + 100 reads for  DB_File                    4.26 seconds     20480 bytes
 
  === INSERT OF 500 BYTE RECORDS ===
-  Time for 100 write/read's for  SDBM_File                   0.21 seconds     658432 bytes
-  Time for 100 write/read's for  MLDBM::Sync::SDBM_File      0.51 seconds     135168 bytes
-  Time for 100 write/read's for  GDBM_File                   2.29 seconds      63472 bytes
-  Time for 100 write/read's for  DB_File                     2.44 seconds     114688 bytes
+  Time for 100 writes + 100 reads for  SDBM_File                  0.17 seconds   1033216 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.54 seconds    110592 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  3.47 seconds     63472 bytes
+  Time for 100 writes + 100 reads for  DB_File                    4.30 seconds     86016 bytes
 
  === INSERT OF 5000 BYTE RECORDS ===
  (skipping test for SDBM_File 1024 byte limit)
-  Time for 100 write/read's for  MLDBM::Sync::SDBM_File      1.30 seconds    2101248 bytes
-  Time for 100 write/read's for  GDBM_File                   2.55 seconds     832400 bytes
-  Time for 100 write/read's for  DB_File                     3.27 seconds     839680 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     1.33 seconds   1915904 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  4.32 seconds    832400 bytes
+  Time for 100 writes + 100 reads for  DB_File                    6.16 seconds    839680 bytes
 
  === INSERT OF 20000 BYTE RECORDS ===
  (skipping test for SDBM_File 1024 byte limit)
-  Time for 100 write/read's for  MLDBM::Sync::SDBM_File      4.54 seconds   13162496 bytes
-  Time for 100 write/read's for  GDBM_File                   5.39 seconds    2063912 bytes
-  Time for 100 write/read's for  DB_File                     4.79 seconds    2068480 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     4.40 seconds   8173568 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  4.86 seconds   2063912 bytes
+  Time for 100 writes + 100 reads for  DB_File                    6.71 seconds   2068480 bytes
 
  === INSERT OF 50000 BYTE RECORDS ===
  (skipping test for SDBM_File 1024 byte limit)
-  Time for 100 write/read's for  MLDBM::Sync::SDBM_File     12.29 seconds   16717824 bytes
-  Time for 100 write/read's for  GDBM_File                   9.10 seconds    5337944 bytes
-  Time for 100 write/read's for  DB_File                    11.97 seconds    5345280 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File    12.87 seconds  27446272 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  5.39 seconds   5337944 bytes
+  Time for 100 writes + 100 reads for  DB_File                    7.22 seconds   5345280 bytes
 
 =head1 WARNINGS
 

@@ -11,6 +11,7 @@ my $t = T->new();
 
 my %db;
 my $sync = tie %db, 'MLDBM::Sync', 'test_dbm', O_RDWR|O_CREAT, 0640;
+%db = ();
 $t->eok($sync, "can't tie to MLDBM::Sync");
 for(1..100) {
     my $key = $_;

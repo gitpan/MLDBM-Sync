@@ -29,10 +29,15 @@ sub FETCH {
     }
 
     if(defined $total_rv) {
-	$total_rv =~ s/^(.)//s;
+	$total_rv =~ s/^(..)//s;
 	my $type = $1;
-	if($type eq 'G') {
+	if($type eq 'G}') {
 	    $total_rv = uncompress($total_rv);
+	} elsif ($type eq 'N}') {
+	    # nothing
+	} else {
+	    # old SDBM_File ?
+	    $total_rv = $type . $total_rv;
 	}
     }
 
@@ -47,7 +52,7 @@ sub STORE {
     # N - No compression
     #
     my $old_value = $value;
-    $value = ($Zlib && (length($value) >= $segment_length/2)) ? "G".compress($value) : "N".$value;
+    $value = ($Zlib && (length($value) >= $segment_length/2)) ? "G}".compress($value) : "N}".$value;
     my($total_rv, $last_index);
     for my $index (0..($MaxSegments)) {
 	if($index == $MaxSegments) {
@@ -83,10 +88,15 @@ sub DELETE {
 	last if length($rv) < $segment_length;
     }
 
-    $total_rv =~ s/^(.)//s;
+    $total_rv =~ s/^(..)//s;
     my $type = $1;
-    if($type eq 'G') {
+    if($type eq 'G}') {
 	$total_rv = uncompress($total_rv);
+    } elsif ($type eq 'N}') {
+	# normal
+    } else {
+	# old SDBM_File
+	$total_rv = $type.$total_rv;
     }
 
     $total_rv;

@@ -39,18 +39,19 @@ for my $SIZE (50, 500, 5000, 20000, 50000) {
 		last if length($rand) > $SIZE;
 	    }
 	    $rand = substr($rand, 0, $SIZE);
-	    $sync->Lock;
 	    my $key = "$$ $_";
+# add lock & unlock to increase performance
+#	    $sync->Lock;
 	    $mldbm{$key} = $rand;
 	    ($mldbm{$key} eq $rand) || warn("can't fetch written value for $key => $mldbm{$key} === $rand");
-	    $sync->UnLock;
+#	    $sync->UnLock;
 	}
 	if($^O !~ /win32/i) { while(wait != -1) {} }
 	if($$ == $parent) {
 	    my $total_time = time() - $time;
 	    my $num_keys = scalar(keys %mldbm);
 	    ($num_keys % $INSERTS) && warn("error, $num_keys should be a multiple of $INSERTS");
-	    printf "  Time for $num_keys write/read's for  %-25s %6.2f seconds  %9d bytes\n", $DB, $total_time, $sync->SyncSize;
+	    printf "  Time for $num_keys writes + $num_keys reads for  %-24s %6.2f seconds  %8d bytes\n", $DB, $total_time, $sync->SyncSize;
 	} else {
 	    exit;
 	}
