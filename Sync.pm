@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = 0.25;
+$VERSION = 0.27;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -26,6 +26,8 @@ $LOCK_EX = LOCK_EX;
 sub TIEHASH {
     my($class, $file, @args) = @_;
 
+    $file =~ /^(.*)$/s;
+    $file = $1;
     my $fh = $file.".lock";
 
     my $self = bless {
@@ -80,10 +82,13 @@ sub AUTOLOAD {
 	$self->lock;
     }
 
-    if (defined $value) {
-	$rv = $self->{dbm}->$func($key, $value);
-    } else {
-	$rv = $self->{dbm}->$func($key);
+    {
+	local $MLDBM::RemoveTaint = $self->{remove_taint};
+	if (defined $value) {
+	    $rv = $self->{dbm}->$func($key, $value);
+	} else {
+	    $rv = $self->{dbm}->$func($key);
+	}
     }
 
     $self->unlock;
@@ -233,16 +238,19 @@ sub Lock {
 	my $file = $self->{lock_file};
 	open($self->{lock_fh}, "+>$file") || die("can't open file $file: $!");
 	flock($self->{lock_fh}, ($read_lock ? $LOCK_SH : $LOCK_EX))
-	    || die("can't ". ($read_lock ? "read" : "write") ." lock $file: $!");
+	  || die("can't ". ($read_lock ? "read" : "write") ." lock $file: $!");
 	$self->{read_lock} = $read_lock;
 	$self->SyncTie;
     } else {
 	if ($self->{read_lock} and ! $read_lock) {
 	    $self->{lock_num}--; # roll back lock count
 	    # confess here to help developer track this down
-	    confess("can't upgrade lock type from LOCK_SH to LOCK_EX! ".
-		    "this could also happen if you tried to write to the MLDBM ".
-		    "in a critical section locked by ReadLock()");
+	    confess("Can't upgrade lock type from LOCK_SH to LOCK_EX! ".
+		    "This could happen if you tried to write to the MLDBM ".
+		    "in a critical section locked by ReadLock(). ".
+		    "Also the read expression my \$v = \$db{'key1'}{'key2'} will trigger a write ".
+		    "if \$db{'key1'} does not already exist, so this will error in a ReadLock() section"
+		    );
 	}
 	1;
     }
@@ -277,7 +285,7 @@ sub SyncSize {
 	    opendir(DIR, $file) || next;
 	    my @files = readdir(DIR);
 	    for my $dir_file (@files) {
-		next if $dir_file =~ /^[\.]+$/;
+		next if $dir_file =~ /^\.\.?$/;
 		$size += (stat("$file/$dir_file"))[7];
 	    }
 	    closedir(DIR);
@@ -349,6 +357,8 @@ requests logically and improve performance for bundled reads & writes.
   $sync_dbm_obj->ReadLock;
     ... all read accesses to DBM LOCK_SH protected, and go to same tied files
     ... WARNING, cannot write to DBM in ReadLock() section, will die()
+    ... WARNING, my $v = $cache{'KEY'}{'SUBKEY'} will trigger a write so not safe
+    ...   to use in ReadLock() section
     my $value = $cache{'KEY'};
   $sync_dbm_obj->UnLock;
 
@@ -521,57 +531,55 @@ very bloated *.pag files for 128+ byte records.
 =head1 BENCHMARKS
 
 In the distribution ./bench directory is a bench_sync.pl script
-that can benchmark using the various DBMs with MLDBM::Sync.  
+that can benchmark using the various DBMs with MLDBM::Sync.
 
 The MLDBM::Sync::SDBM_File DBM is special because is uses 
 SDBM_File for fast small inserts, but slows down linearly
-with the size of the data being inserted and read, with the 
-speed matching that of GDBM_File & DB_File somewhere
-around 20,000 bytes.  
+with the size of the data being inserted and read.
 
-So for DBM key/value pairs up to 10000 bytes, you are likely 
-better off with MLDBM::Sync::SDBM_File if you can afford the 
-extra space it uses.  At 20,000 bytes, time is a wash, and 
-disk space is greater, so you might as well use DB_File 
-or GDBM_File.
-
-The results for a dual 450 linux 2.2.14, with a ext2 file
-system blocksize 4096 mounted async on a SCSI disk were as follows:
+The results for a dual PIII-450 linux 2.4.7, with a ext3 file system 
+blocksize 4096 mounted async on a RAID-1 2xIDE 7200 RPM disk were as follows:
 
  === INSERT OF 50 BYTE RECORDS ===
-  Time for 100 writes + 100 reads for  SDBM_File                  0.13 seconds     12288 bytes
-  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.15 seconds     12288 bytes
-  Time for 100 writes + 100 reads for  GDBM_File                  3.33 seconds     18066 bytes
-  Time for 100 writes + 100 reads for  DB_File                    4.26 seconds     20480 bytes
+  Time for 100 writes + 100 reads for  SDBM_File                  0.16 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.19 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  1.09 seconds     18066 bytes
+  Time for 100 writes + 100 reads for  DB_File                    0.67 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  Tie::TextDir .04           0.31 seconds     13192 bytes
 
  === INSERT OF 500 BYTE RECORDS ===
-  Time for 100 writes + 100 reads for  SDBM_File                  0.17 seconds   1033216 bytes
-  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.54 seconds    110592 bytes
-  Time for 100 writes + 100 reads for  GDBM_File                  3.47 seconds     63472 bytes
-  Time for 100 writes + 100 reads for  DB_File                    4.30 seconds     86016 bytes
+ (skipping test for SDBM_File 100 byte limit)
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.52 seconds    110592 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  1.20 seconds     63472 bytes
+  Time for 100 writes + 100 reads for  DB_File                    0.66 seconds     86016 bytes
+  Time for 100 writes + 100 reads for  Tie::TextDir .04           0.32 seconds     58192 bytes
 
  === INSERT OF 5000 BYTE RECORDS ===
- (skipping test for SDBM_File 1024 byte limit)
-  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     1.33 seconds   1915904 bytes
-  Time for 100 writes + 100 reads for  GDBM_File                  4.32 seconds    832400 bytes
-  Time for 100 writes + 100 reads for  DB_File                    6.16 seconds    839680 bytes
+ (skipping test for SDBM_File 100 byte limit)
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     1.41 seconds   1163264 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  1.38 seconds    832400 bytes
+  Time for 100 writes + 100 reads for  DB_File                    1.21 seconds    831488 bytes
+  Time for 100 writes + 100 reads for  Tie::TextDir .04           0.58 seconds    508192 bytes
 
  === INSERT OF 20000 BYTE RECORDS ===
- (skipping test for SDBM_File 1024 byte limit)
-  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     4.40 seconds   8173568 bytes
-  Time for 100 writes + 100 reads for  GDBM_File                  4.86 seconds   2063912 bytes
-  Time for 100 writes + 100 reads for  DB_File                    6.71 seconds   2068480 bytes
+ (skipping test for SDBM_File 100 byte limit)
+ (skipping test for MLDBM::Sync db size > 1M)
+  Time for 100 writes + 100 reads for  GDBM_File                  2.23 seconds   2063912 bytes
+  Time for 100 writes + 100 reads for  DB_File                    1.89 seconds   2060288 bytes
+  Time for 100 writes + 100 reads for  Tie::TextDir .04           1.26 seconds   2008192 bytes
 
  === INSERT OF 50000 BYTE RECORDS ===
- (skipping test for SDBM_File 1024 byte limit)
-  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File    12.87 seconds  27446272 bytes
-  Time for 100 writes + 100 reads for  GDBM_File                  5.39 seconds   5337944 bytes
-  Time for 100 writes + 100 reads for  DB_File                    7.22 seconds   5345280 bytes
+ (skipping test for SDBM_File 100 byte limit)
+ (skipping test for MLDBM::Sync db size > 1M)
+  Time for 100 writes + 100 reads for  GDBM_File                  3.66 seconds   5337944 bytes
+  Time for 100 writes + 100 reads for  DB_File                    3.64 seconds   5337088 bytes
+  Time for 100 writes + 100 reads for  Tie::TextDir .04           2.80 seconds   5008192 bytes
 
 =head1 AUTHORS
 
-Copyright (c) 2001 Joshua Chamas, Chamas Enterprises Inc.  All rights reserved.
-Sponsored by development on NodeWorks http://www.nodeworks.com
+Copyright (c) 2001-2002 Joshua Chamas, Chamas Enterprises Inc.  All rights reserved.
+Sponsored by development on NodeWorks http://www.nodeworks.com and Apache::ASP
+http://www.apache-asp.org
 
 This program is free software; you can redistribute it
 and/or modify it under the same terms as Perl itself.

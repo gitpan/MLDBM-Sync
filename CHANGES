@@ -1,3 +1,23 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .27; $DATE = '2002/06/23';
+
++ Added note to error for Lock upgrade during ReadLock
+  for case of doing unintentional write with construct like:
+  
+    tied(%dbm)->ReadLock;
+    my $v = $dbm{'key'}{'key2'}; # will error with write !!
+                 ^^^^^^^^^
+  Thanks to Steve Keith for noting this bizarre perl behavior.
+
++ bench/bench_sync.pl now creates a test dbm in the local directory
+  being run instead of /tmp ... benchmark results were being skewed
+  since /tmp could be a fast RAM cache file system like tmpfs on Linux
+
++ Added MANIFEST.SKIP for building
+
++ t/taint.t perl taint check test added.
+
++ escape inbound file parameter for safe taint checking
+
 $MODULE = "MLDBM::Sync"; $VERSION = .25; $DATE = '2001/11/11';
 
 + Honors the $MLDBM::RemoveTaint setting when MLDBM::Sync object is created,

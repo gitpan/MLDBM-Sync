@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -w
+#!/usr/bin/perl -w
 
 use lib qw(.. . lib ../lib);
 eval "use Sync";
@@ -54,7 +54,7 @@ for my $SIZE (50, 500, 5000, 20000, 50000) {
 	my $file_suffix = $real_db;
 	$file_suffix =~ s/\W/_/isg;
 	my %mldbm;
-	my $sync = tie(%mldbm, 'MLDBM::Sync', "/tmp/MLDBM_SYNC_BENCH_".$file_suffix, O_CREAT|O_RDWR, 0666)
+	my $sync = tie(%mldbm, 'MLDBM::Sync', "MLDBM_SYNC_BENCH_".$file_suffix, O_CREAT|O_RDWR, 0666)
 	  || die("can't tie to /tmp/bench_mldbm: $!");
 	if($opt_cache) {
 	    $sync->SyncCacheSize('1000K');

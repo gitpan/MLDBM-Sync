@@ -1,0 +1,5 @@
+test_dbm
+MLDBM_SYNC
+MLDBM-Sync-\d
+Makefile\.old$
+\~$
