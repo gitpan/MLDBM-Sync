@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = 0.21;
+$VERSION = 0.23;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -269,6 +269,7 @@ sub SyncSize {
 	$size += (stat($file))[7];
 
 	if(-d $file) {
+	    $size += (stat($file))[7];
 	    opendir(DIR, $file) || next;
 	    my @files = readdir(DIR);
 	    for my $dir_file (@files) {
@@ -567,6 +568,9 @@ system blocksize 4096 mounted async on a SCSI disk were as follows:
 
 Copyright (c) 2001 Joshua Chamas, Chamas Enterprises Inc.  All rights reserved.
 Sponsored by development on NodeWorks http://www.nodeworks.com
+
+This program is free software; you can redistribute it
+and/or modify it under the same terms as Perl itself.
 
 =head1 SEE ALSO
 

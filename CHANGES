@@ -1,4 +1,19 @@
-$MODULE = "MLDBM::Sync"; $VERSION = .21; $DATE = 'TBA';
+$MODULE = "MLDBM::Sync"; $VERSION = .23; $DATE = '2001/11/08';
+
++ Updated AUTHORS section with perl license reference.
+
++ ./bench/bench_sync.pl has -n argument to specify # of reads/writes
+  where default is 100
+
++ ./bench/bench_sync.pl has --bundle argument to allows for reads/writes
+  in locked sections of that #, which improves performance.
+
++ $dbm->Size() for Tie::TextDir now adds size of directory as
+  reported by OS.  This still does not seem to take into account
+  the extra file inode overhead on a file system like ext2 linux
+  but its better now at least.
+
+$MODULE = "MLDBM::Sync"; $VERSION = .21; $DATE = '2001/10/31';
 
 + Added support in CLEAR() & SyncSize() for a tie directory
   based data structure like Tie::TextDir
