@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .05;
+$VERSION = .07;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -10,7 +10,12 @@ use Digest::MD5 qw(md5_hex);
 use strict;
 use Carp qw(confess);
 no strict qw(refs);
-use vars qw($AUTOLOAD @EXT $LOCK_SH $LOCK_EX $LOCK_UN);
+use vars qw($AUTOLOAD @EXT $CACHE_ERR $LOCK_SH $LOCK_EX $LOCK_UN);
+
+eval "use Tie::Cache;";
+if (($@)) {
+    $CACHE_ERR = $@;
+}
 
 $LOCK_SH = LOCK_SH;
 $LOCK_UN = LOCK_UN;
@@ -59,18 +64,30 @@ sub AUTOLOAD {
 	$key = $self->SyncChecksum($key);
     }
 
+    # CACHE, short circuit if found in cache on FETCH/EXISTS
+    # after checksum, since that's what we store
+    my $cache = (defined $key) ? $self->{cache} : undef;
+    if($cache && ($func eq 'FETCH' or $func eq 'EXISTS')) {
+	my $rv = $cache->$func($key);
+	defined($rv) && return($rv);
+    }
+
+    my $rv;
     if ($func eq 'FETCH') {
 	$self->read_lock;
     } else {
 	$self->lock;
     }
-    my $rv;
     if (defined $value) {
 	$rv = $self->{dbm}->$func($key, $value);
     } else {
 	$rv = $self->{dbm}->$func($key);
     }
     $self->unlock;
+
+    # do after lock critical section, no point taking 
+    # any extra time there
+    $cache && $cache->$func($key, $value);
 
     $rv;
 }
@@ -87,6 +104,8 @@ sub CLEAR {
 	unlink($file) || die("can't unlink file $file: $!");
     }
     $self->unlock;
+
+    $self->{cache} && $self->{cache}->CLEAR;
 
     1;
 };
@@ -133,6 +152,32 @@ sub SyncChecksum {
     } else {
 	join('g', md5_hex($key), sprintf("%07d", length($key)));
     }
+}
+
+sub SyncCacheSize {
+    my($self, $size) = @_;
+    $CACHE_ERR && die("need Tie::Cache installed to use this feature: $@");
+
+    if ($size =~ /^(\d+)(M|K)$/) {
+	my($num, $type) = ($1, $2);
+	if (($type eq 'M')) {
+	    $size = $num * 1024 * 1024;
+	} elsif (($type eq 'K')) {
+	    $size = $num * 1024;
+	} else {
+	    die "$type symbol not understood for $size";
+	}
+    } else {
+	($size =~ /^\d+$/) or die("$size must be bytes size for cache");
+    }
+    
+    if ($self->{cache}) {
+	$self->{cache}->CLEAR(); # purge old cache, to free up RAM maybe for mem leaks
+    }
+    
+    my %cache;
+    my $cache = tie %cache, 'Tie::Cache', { MaxBytes => $size };
+    $self->{cache} = $cache; # use non tied interface, faster
 }
 
 sub SyncTie {
@@ -232,11 +277,14 @@ __END__
   my $value = $cache{"AAAA"};
   $sync_dbm_obj->UnLock;
 
-  # SERIALIZED PROTECTED read access with explicit read lock for both reads
+  # SERIALIZED PROTECTED READ access with explicit read lock for both reads
   $sync_dbm_obj->ReadLock;
   my @keys = keys %cache;
   my $value = $cache{'AAAA'};
   $sync_dbm_obj->UnLock;
+
+  # MEMORY CACHE LAYER with Tie::Cache
+  $sync_dbm_obj->SyncCacheSize('100K');
 
   # KEY CHECKSUMS, for lookups on MD5 checksums on large keys
   my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
@@ -275,6 +323,9 @@ MLDBM continues to serve as the underlying OO layer that
 serializes complex data structures to be stored in the databases.
 See the MLDBM L<BUGS> section for important limitations.
 
+MLDBM::Sync also provides built in RAM caching with Tie::Cache
+md5 key checksum functionality.
+
 =head1 INSTALL
 
 Like any other CPAN module, either use CPAN.pm, or perl -MCPAN C<-e> shell,
@@ -290,7 +341,7 @@ or get the file MLDBM-Sync-x.xx.tar.gz, unzip, untar and:
 The MLDBM::Sync wrapper protects MLDBM databases by locking
 and unlocking around read and write requests to the databases.
 Also necessary is for each new lock to tie() to the database
-internally, untie()'ing when unlocking.  This flushes any
+internally, untie()ing when unlocking.  This flushes any
 i/o for the dbm to the operating system, and allows for
 concurrent read/write access to the databases.
 
@@ -337,6 +388,43 @@ use this API for greater performance:
     ...
   }
   $dbm_obj->UnLock;
+
+=head1 CACHING
+
+I built MLDBM::Sync to serve as a fast and robust caching layer
+for use in multi-process environments like mod_perl.  In order
+to provide an additional speed boost when caching static data,
+I have added an RAM caching layer with Tie::Cache, which 
+regulates the size of the memory used with its MaxBytes setting.
+
+To activate this caching, just:
+
+  my $dbm = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
+  $dbm->SyncCacheSize(100000);  # 100000 bytes max memory used
+  $dbm->SyncCacheSize('100K');  # 100 Kbytes max memory used
+  $dbm->SyncCacheSize('1M');    # 1 Megabyte max memory used
+
+The ./bench/bench_sync.pl, run like "bench_sync.pl C<-c>" will run 
+the tests with caching turned on creating a benchmark with 50%
+cache hits.
+
+One run without caching was:
+
+ === INSERT OF 50 BYTE RECORDS ===
+  Time for 100 writes + 100 reads for  SDBM_File                  0.16 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.17 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  3.37 seconds     17980 bytes
+  Time for 100 writes + 100 reads for  DB_File                    4.45 seconds     20480 bytes
+
+And with caching, with 50% cache hits:
+
+ === INSERT OF 50 BYTE RECORDS ===
+  Time for 100 writes + 100 reads for  SDBM_File                  0.11 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.11 seconds     12288 bytes
+  Time for 100 writes + 100 reads for  GDBM_File                  2.49 seconds     17980 bytes
+  Time for 100 writes + 100 reads for  DB_File                    2.55 seconds     20480 bytes
+
+Even for SDBM_File, this speedup is near 33%.
 
 =head1 KEYS CHECKSUM
 
@@ -390,7 +478,7 @@ byte segments, and spreading those segments across many records,
 creating a virtual record layer.  It also uses Compress::Zlib
 to compress STORED data, reducing the number of these 128 byte 
 records. In benchmarks, 128 byte record segments seemed to be a
-sweet spot for space/time effienciency, as SDBM_File created
+sweet spot for space/time efficiency, as SDBM_File created
 very bloated *.pag files for 128+ byte records.
 
 =head1 BENCHMARKS

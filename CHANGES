@@ -1,8 +1,16 @@
-$MODULE = "MLDBM::Sync"; $VERSION = .05; $DATE = 'TBA';
+$MODULE = "MLDBM::Sync"; $VERSION = .07; $DATE = 'TBA';
+
++ $dbm->SyncCacheSize() API activates 2nd layer RAM cache
+  via Tie::Cache with MaxBytes set.
+
++ CACHE documentation, cache.t test, sample benchmarks
+  with ./bench/bench_sync.pl -c
+
+$MODULE = "MLDBM::Sync"; $VERSION = .05; $DATE = '2001/03/13';
 
 + Simpler use of locking.
 
-- Read locking works on Solaris, had to open file in 
+- Read locking works on Solaris, had to open lock file in 
   read/write mode.  Linux/NT didn't care.
 
 $MODULE = "MLDBM::Sync"; $VERSION = .03; $DATE = 'TBA';
@@ -26,7 +34,7 @@ $MODULE = "MLDBM::Sync"; $VERSION = .03; $DATE = 'TBA';
 + Better test for MLDBM::Sync::SDBM_File, using keys with
   odd characters.
 
-$MODULE = "MLDBM::Sync"; $VERSION = .01; $DATE = '2/7/2001';
+$MODULE = "MLDBM::Sync"; $VERSION = .01; $DATE = '2001/02/07';
 
 + Initial release with flock concurrent access control to 
   MLDBM databases.  

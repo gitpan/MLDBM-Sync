@@ -14,9 +14,22 @@ sub new {
 	}, $class;
 }    
 
+sub skip {
+    my($self, $message) = @_;
+    $message ||= '';
+
+    $self->{t}++;
+    $self->{buffer} .= "ok $self->{t} # skip\n";
+    print STDERR "skipping test: $message; ";
+    $self->done;
+    exit;
+
+}
+
 sub ok {
-    $_[0]->{t}++;
-    $_[0]->{buffer} .= "ok\n";
+    my $self = shift;
+    $self->{t}++;
+    $self->{buffer} .= "ok $self->{t}\n";
 }
 
 *not = *not_ok;

@@ -1,20 +1,21 @@
 #!/usr/local/bin/perl -w
 
 use lib qw(.. . lib ../lib);
-#eval "use MLDBM::Sync";
-#print $@;
 eval "use Sync";
 print $@;
 use Fcntl;
 use Time::HiRes qw(time);
 use Carp qw(confess);
 use strict;
-
-$MLDBM::UseDB = 'SDBM_File';
+use Getopt::Long;
 my $INSERTS = 25;
 my $parent = $$;
 $SIG{__DIE__} = \&confess;
 srand(0);
+
+$MLDBM::UseDB = $MLDBM::UseDB; # supress warning
+use vars qw($opt_cache);
+&GetOptions('c' => \$opt_cache);
 
 for my $SIZE (50, 500, 5000, 20000, 50000) {
     print "\n=== INSERT OF $SIZE BYTE RECORDS ===\n";
@@ -25,10 +26,13 @@ for my $SIZE (50, 500, 5000, 20000, 50000) {
 	    print " (skipping test for SDBM_File 1024 byte limit)\n";
 	    next 
 	};
-	$MLDBM::UseDB = $DB;
+	local $MLDBM::UseDB = $DB;
 	my %mldbm;
 	my $sync = tie(%mldbm, 'MLDBM::Sync', '/tmp/MLDBM_SYNC_BENCH', O_CREAT|O_RDWR, 0666)
 	  || die("can't tie to /tmp/bench_mldbm: $!");
+	if($opt_cache) {
+	    $sync->SyncCacheSize('1000K');
+	}
 	%mldbm = ();
 	my $time = time;
 	if($^O !~ /win32/i) { fork; fork; } # will launch 4 processes

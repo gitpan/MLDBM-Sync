@@ -18,11 +18,14 @@ SYNOPSIS
       my $value = $cache{"AAAA"};
       $sync_dbm_obj->UnLock;
 
-      # SERIALIZED PROTECTED read access with explicit read lock for both reads
+      # SERIALIZED PROTECTED READ access with explicit read lock for both reads
       $sync_dbm_obj->ReadLock;
       my @keys = keys %cache;
       my $value = $cache{'AAAA'};
       $sync_dbm_obj->UnLock;
+
+      # MEMORY CACHE LAYER with Tie::Cache
+      $sync_dbm_obj->SyncCacheSize('100K');
 
       # KEY CHECKSUMS, for lookups on MD5 checksums on large keys
       my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
@@ -61,6 +64,9 @@ DESCRIPTION
     complex data structures to be stored in the databases. See the MLDBM the
     BUGS manpage section for important limitations.
 
+    MLDBM::Sync also provides built in RAM caching with Tie::Cache md5 key
+    checksum functionality.
+
 INSTALL
     Like any other CPAN module, either use CPAN.pm, or perl -MCPAN `-e'
     shell, or get the file MLDBM-Sync-x.xx.tar.gz, unzip, untar and:
@@ -74,7 +80,7 @@ LOCKING
     The MLDBM::Sync wrapper protects MLDBM databases by locking and
     unlocking around read and write requests to the databases. Also
     necessary is for each new lock to tie() to the database internally,
-    untie()'ing when unlocking. This flushes any i/o for the dbm to the
+    untie()ing when unlocking. This flushes any i/o for the dbm to the
     operating system, and allows for concurrent read/write access to the
     databases.
 
@@ -120,6 +126,41 @@ LOCKING
         ...
       }
       $dbm_obj->UnLock;
+
+CACHING
+    I built MLDBM::Sync to serve as a fast and robust caching layer for use
+    in multi-process environments like mod_perl. In order to provide an
+    additional speed boost when caching static data, I have added an RAM
+    caching layer with Tie::Cache, which regulates the size of the memory
+    used with its MaxBytes setting.
+
+    To activate this caching, just:
+
+      my $dbm = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
+      $dbm->SyncCacheSize(100000);  # 100000 bytes max memory used
+      $dbm->SyncCacheSize('100K');  # 100 Kbytes max memory used
+      $dbm->SyncCacheSize('1M');    # 1 Megabyte max memory used
+
+    The ./bench/bench_sync.pl, run like "bench_sync.pl -c" will run the
+    tests with caching turned on creating a benchmark with 50% cache hits.
+
+    One run without caching was:
+
+     === INSERT OF 50 BYTE RECORDS ===
+      Time for 100 writes + 100 reads for  SDBM_File                  0.16 seconds     12288 bytes
+      Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.17 seconds     12288 bytes
+      Time for 100 writes + 100 reads for  GDBM_File                  3.37 seconds     17980 bytes
+      Time for 100 writes + 100 reads for  DB_File                    4.45 seconds     20480 bytes
+
+    And with caching, with 50% cache hits:
+
+     === INSERT OF 50 BYTE RECORDS ===
+      Time for 100 writes + 100 reads for  SDBM_File                  0.11 seconds     12288 bytes
+      Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File     0.11 seconds     12288 bytes
+      Time for 100 writes + 100 reads for  GDBM_File                  2.49 seconds     17980 bytes
+      Time for 100 writes + 100 reads for  DB_File                    2.55 seconds     20480 bytes
+
+    Even for SDBM_File, this speedup is near 33%.
 
 KEYS CHECKSUM
     A common operation on database lookups is checksumming the key, prior to
@@ -169,8 +210,8 @@ New MLDBM::Sync::SDBM_File
     virtual record layer. It also uses Compress::Zlib to compress STORED
     data, reducing the number of these 128 byte records. In benchmarks, 128
     byte record segments seemed to be a sweet spot for space/time
-    effienciency, as SDBM_File created very bloated *.pag files for 128+
-    byte records.
+    efficiency, as SDBM_File created very bloated *.pag files for 128+ byte
+    records.
 
 BENCHMARKS
     In the distribution ./bench directory is a bench_sync.pl script that can
