@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .17;
+$VERSION = .19;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -132,13 +132,13 @@ sub FIRSTKEY {
     $self->read_lock;
     my $key = $self->{dbm}->FIRSTKEY();
     my @keys;
-    if(defined $key) {
-	do {
-	    push(@keys, $key);
-	} while($key = $self->{dbm}->NEXTKEY($key));
+    while(1) {
+	last if ! defined($key);
+	push(@keys, $key);
+	$key = $self->{dbm}->NEXTKEY($key);
     }
-    $self->{'keys'} = \@keys;
     $self->unlock;
+    $self->{'keys'} = \@keys;
 
     $self->NEXTKEY;
 }

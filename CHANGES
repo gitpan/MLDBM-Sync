@@ -1,3 +1,8 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .19; $DATE = '2001/10/15';
+
+- Fixed keys(%hash), where one of the keys was boolean FALSE
+  like '', or 0.
+
 $MODULE = "MLDBM::Sync"; $VERSION = .17; $DATE = '2001/10/11';
 
 - Make EXISTS safe after explicity tied hash ReadLock()
