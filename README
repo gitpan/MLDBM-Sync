@@ -1,0 +1,133 @@
+NAME
+      MLDBM::Sync (BETA) - safe concurrent access to MLDBM databases
+
+SYNOPSIS
+      use MLDBM::Sync;                       # this gets the default, SDBM_File
+      use MLDBM qw(DB_File Storable);        # use Storable for serializing
+      use MLDBM qw(MLDBM::Sync::SDBM_File);  # use extended SDBM_File, handles values > 1024 bytes
+
+      # NORMAL PROTECTED read/write with implicit locks per i/o request
+      tie %cache, 'MLDBM::Sync' [..other DBM args..] or die $!;
+      $cache{"AAAA"} = "BBBB";
+      my $value = $cache{"AAAA"};
+
+      # SERIALIZED PROTECTED read/write with explicity lock for both i/o requests
+      my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
+      $sync_dbm_obj->Lock;
+      $cache{"AAAA"} = "BBBB";
+      my $value = $cache{"AAAA"};
+      $sync_dbm_obj->UnLock;
+
+DESCRIPTION
+    This module wraps around the MLDBM interface, by handling concurrent
+    access to MLDBM databases with file locking, and flushes i/o explicity
+    per lock/unlock. The new Lock()/UnLock() API can be used to serialize
+    requests logically and improve performance for bundled reads & writes.
+
+      my $sync_dbm_obj = tie %cache, 'MLDBM::Sync', '/tmp/syncdbm', O_CREAT|O_RDWR, 0640;
+      $sync_dbm_obj->Lock;
+        ... all accesses to DBM LOCK_EX protected, and go to same file handles ...
+      $sync_dbm_obj->UnLock;
+
+    MLDBM continues to serve as the underlying OO layer that serializes
+    complex data structures to be stored in the databases. See the MLDBM the
+    BUGS manpage section for important limitations.
+
+INSTALL
+    Like any other CPAN module, either use CPAN.pm, or perl -MCPAN `-e'
+    shell, or get the file MLDBM-Sync-x.xx.tar.gz, unzip, untar and:
+
+      perl Makefile.PL
+      make
+      make test
+      make install
+
+New MLDBM::Sync::SDBM_File
+    SDBM_File, the default used for MLDBM and therefore MLDBM::Sync has a
+    limit of 1024 bytes for the size of a record.
+
+    SDBM_File is also an order of magnitude faster for small records to use
+    with MLDBM::Sync, than DB_File or GDBM_File, because the tie()/untie()
+    to the dbm is much faster. Therefore, bundled with MLDBM::Sync release
+    is a MLDBM::Sync::SDBM_File layer which works around this 1024 byte
+    limit. To use, just:
+
+      use MLDBM qw(MLDBM::Sync::SDBM_File);
+
+    It works by breaking up up the STORE() values into small 128 byte
+    segments, and spreading those segments across many records, creating a
+    virtual record layer. It also uses Compress::Zlib to compress STORED
+    data, reducing the number of these 128 byte records. In benchmarks, 128
+    byte record segments seemed to be a sweet spot for space/time
+    effienciency, as SDBM_File created very bloated *.pag files for 128+
+    byte records.
+
+BENCHMARKS
+    In the distribution ./bench directory is a bench_sync.pl script that can
+    benchmark using the various DBMs with MLDBM::Sync.
+
+    The MLDBM::Sync::SDBM_File DBM is special because is uses SDBM_File for
+    fast small inserts, but slows down linearly with the size of the data
+    being inserted and read, with the speed matching that of GDBM_File &
+    DB_File somewhere around 20,000 bytes.
+
+    So for DBM key/value pairs up to 10000 bytes, you are likely better off
+    with MLDBM::Sync::SDBM_File if you can afford the extra space it uses.
+    At 20,000 bytes, time is a wash, and disk space is greater, so you might
+    as well use DB_File or GDBM_File.
+
+    Note that MLDBM::Sync::SDBM_File is ALPHA as of 2/27/2001.
+
+    The results for a dual 450 linux 2.2.14, with a ext2 file system
+    blocksize 4096 mounted async on a SCSI disk were as follows:
+
+     === INSERT OF 50 BYTE RECORDS ===
+      Time for 100 write/read's for  SDBM_File                   0.12 seconds      12288 bytes
+      Time for 100 write/read's for  MLDBM::Sync::SDBM_File      0.14 seconds      12288 bytes
+      Time for 100 write/read's for  GDBM_File                   2.07 seconds      18066 bytes
+      Time for 100 write/read's for  DB_File                     2.48 seconds      20480 bytes
+
+     === INSERT OF 500 BYTE RECORDS ===
+      Time for 100 write/read's for  SDBM_File                   0.21 seconds     658432 bytes
+      Time for 100 write/read's for  MLDBM::Sync::SDBM_File      0.51 seconds     135168 bytes
+      Time for 100 write/read's for  GDBM_File                   2.29 seconds      63472 bytes
+      Time for 100 write/read's for  DB_File                     2.44 seconds     114688 bytes
+
+     === INSERT OF 5000 BYTE RECORDS ===
+     (skipping test for SDBM_File 1024 byte limit)
+      Time for 100 write/read's for  MLDBM::Sync::SDBM_File      1.30 seconds    2101248 bytes
+      Time for 100 write/read's for  GDBM_File                   2.55 seconds     832400 bytes
+      Time for 100 write/read's for  DB_File                     3.27 seconds     839680 bytes
+
+     === INSERT OF 20000 BYTE RECORDS ===
+     (skipping test for SDBM_File 1024 byte limit)
+      Time for 100 write/read's for  MLDBM::Sync::SDBM_File      4.54 seconds   13162496 bytes
+      Time for 100 write/read's for  GDBM_File                   5.39 seconds    2063912 bytes
+      Time for 100 write/read's for  DB_File                     4.79 seconds    2068480 bytes
+
+     === INSERT OF 50000 BYTE RECORDS ===
+     (skipping test for SDBM_File 1024 byte limit)
+      Time for 100 write/read's for  MLDBM::Sync::SDBM_File     12.29 seconds   16717824 bytes
+      Time for 100 write/read's for  GDBM_File                   9.10 seconds    5337944 bytes
+      Time for 100 write/read's for  DB_File                    11.97 seconds    5345280 bytes
+
+WARNINGS
+    MLDBM::Sync is in BETA. As of 2/27/2001 I have been using it in
+    development for months, and been using its techniques for years in
+    Apache::ASP $Session & $Application data storage. Future releases of
+    Apache::ASP will use MLDBM::Sync for its Apache::ASP::State base
+    implementation instead of MLDBM
+
+    MLDBM::Sync::SDBM_File is ALPHA quality. Databases created while using
+    it may not be compatible with future releases if the segment manager
+    code or support for compression changes.
+
+TODO
+    Production testing.
+
+AUTHORS
+    Copyright (c) 2001 Joshua Chamas, Chamas Enterprises Inc. All rights
+    reserved. Sponsored by development on NodeWorks http://www.nodeworks.com
+
+SEE ALSO
+     MLDBM(3), SDBM_File(3), DB_File(3), GDBM_File(3)

@@ -1,0 +1,17 @@
+$MODULE = "MLDBM::Sync"; $VERSION = .01; $DATE = '2/7/2001';
+
++ Initial release with flock concurrent access control to 
+  MLDBM databases.  
+
++ Also MLDBM::Sync::SDBM_File wrapper for getting around the 
+  1024 byte / record limitation for sDBM_File.  Writes data
+  in segments of 128 bytes.  This was created because SDBM_File
+  access is an order of magnitude faster than DB_File on Linux
+  with tie/untie per write in the MLDBM::Sync model, which is 
+  for i/o flushing do dbms don't get corrupt.  
+
+  But, then one has to worry about exceeding the 1024 byte limit, 
+  which can happen for serializing larger objects.  Well worry
+  no more!
+
+
