@@ -1,9 +1,10 @@
 
 package MLDBM::Sync::SDBM_File;
+$VERSION = .11;
 
 use SDBM_File;
 use strict;
-use vars qw(@ISA  $MaxSegments $MaxSegmentLength %KEYS $Zlib);
+use vars qw(@ISA  $MaxSegments $MaxSegmentLength %KEYS $Zlib $VERSION);
 
 @ISA = qw(SDBM_File);
 $MaxSegments   = 8192; # to a 1M limit
@@ -47,6 +48,18 @@ sub FETCH {
 sub STORE {
     my($self, $key, $value) = @_;
     my $segment_length = $MaxSegmentLength;
+
+    # DELETE KEYS FIRST
+    for my $index (0..($MaxSegments-1)) {
+	my $index_key = _index_key($key, $index);
+	my $rv = $self->SUPER::FETCH($index_key);
+	if(defined $rv) {
+	    $self->SUPER::DELETE($index_key);
+	} else {
+	    last;
+	}
+	last if length($rv) < $segment_length;
+    }
 
     # G - Gzip compression
     # N - No compression

@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .09;
+$VERSION = .11;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -104,8 +104,7 @@ sub CLEAR {
 	unlink($file) || die("can't unlink file $file: $!");
     }
     $self->unlock;
-    unlink($self->{lock_file}) 
-      || warn("could not unlink lock file $self->{lock_file}: $!");
+    unlink($self->{lock_file});
 
     $self->{cache} && $self->{cache}->CLEAR;
 
@@ -259,13 +258,14 @@ __END__
 
 =head1 NAME
 
-  MLDBM::Sync (BETA) - safe concurrent access to MLDBM databases
+  MLDBM::Sync - safe concurrent access to MLDBM databases
 
 =head1 SYNOPSIS
 
   use MLDBM::Sync;                       # this gets the default, SDBM_File
   use MLDBM qw(DB_File Storable);        # use Storable for serializing
   use MLDBM qw(MLDBM::Sync::SDBM_File);  # use extended SDBM_File, handles values > 1024 bytes
+  use Fcntl qw(:DEFAULT);                # import symbols O_CREAT & O_RDWR for use with DBMs
 
   # NORMAL PROTECTED read/write with implicit locks per i/o request
   my $sync_dbm_obj = tie %cache, 'MLDBM::Sync' [..other DBM args..] or die $!;
@@ -500,8 +500,6 @@ extra space it uses.  At 20,000 bytes, time is a wash, and
 disk space is greater, so you might as well use DB_File 
 or GDBM_File.
 
-Note that MLDBM::Sync::SDBM_File is ALPHA as of 2/27/2001.
-
 The results for a dual 450 linux 2.2.14, with a ext2 file
 system blocksize 4096 mounted async on a SCSI disk were as follows:
 
@@ -534,22 +532,6 @@ system blocksize 4096 mounted async on a SCSI disk were as follows:
   Time for 100 writes + 100 reads for  MLDBM::Sync::SDBM_File    12.87 seconds  27446272 bytes
   Time for 100 writes + 100 reads for  GDBM_File                  5.39 seconds   5337944 bytes
   Time for 100 writes + 100 reads for  DB_File                    7.22 seconds   5345280 bytes
-
-=head1 WARNINGS
-
-MLDBM::Sync is in BETA.  As of 2/27/2001 I have been using 
-it in development for months, and been using its techniques for
-years in Apache::ASP $Session & $Application data storage.
-Future releases of Apache::ASP will use MLDBM::Sync for 
-its Apache::ASP::State base implementation instead of MLDBM
-
-MLDBM::Sync::SDBM_File is ALPHA quality.  Databases created 
-while using it may not be compatible with future releases
-if the segment manager code or support for compression changes.
-
-=head1 TODO
-
-Production testing.
 
 =head1 AUTHORS
 

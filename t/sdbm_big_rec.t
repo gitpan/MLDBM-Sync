@@ -23,9 +23,16 @@ for(1..10) {
 }
 $t->eok(scalar(keys %db) == 10, "key count not successful");
 
-$db{"DEL"} = "DELETED";
-$t->eok($db{"DEL"}, "failed to add key to delete");
-$t->eok(delete $db{"DEL"} eq 'DELETED', "failed to get right delete return value");
+my $del_value = "DELETED".join('', map { rand() } 1..100);
+$db{"DEL"} = $del_value;
+$t->eok($db{"DEL"} eq $del_value, "failed to add key to delete");
+$t->eok(delete $db{"DEL"} eq $del_value, "failed to get right delete return value");
+
+my $short_del = substr($del_value,0,100);
+$db{"DEL"} = $del_value;
+$db{"DEL"} = $short_del;
+$t->eok($db{"DEL"} eq $short_del, "failed to add short value to delete");
+$t->eok(delete $db{"DEL"} eq $short_del, "failed to get right short delete return value");
 
 $t->eok(! $db{"DEL"}, "failed to delete key");
 $t->eok(scalar(keys %db) == 10, "key count not successful");

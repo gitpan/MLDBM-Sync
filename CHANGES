@@ -1,10 +1,21 @@
-$MODULE = "MLDBM::Sync"; $VERSION = .09; $DATE = 'TBA';
+$MODULE = "MLDBM::Sync"; $VERSION = .11; $DATE = '2001/09/12';
+
+++ Taking module out of BETA.  Been using it in production 
+   for 3 months, and in development for 6.
+
+- MLDBM::Sync::SDBM_File STORE() now deletes prior key parts
+  before storing the value, which will result in more correct
+  behavior, there was a possible bug here.
 
 + Deletion of lock file when calling CLEAR(), or %dbm = ()
   Do this after unlock, which _might_ have a race condition
   but haven't seen in in heavy load testing... MLDBM::Sync
   recreates the lock file every time if necessary, so this
-  may not be an issue anyway.
+  may not be an issue anyway.  Might be good to unlink before
+  unlocking, but this might only work on *nix platformns,
+  now Win32.
+
+$MODULE = "MLDBM::Sync"; $VERSION = .09; $DATE = '2001/07/31';
 
 - Bug fix for undefined warning in MLDBM::Sync::SDBM_File
 
