@@ -11,7 +11,7 @@
 #   MakeMaker Parameters:
 
 #	NAME => q[MLDBM::Sync]
-#	PREREQ_PM => {  }
+#	PREREQ_PM => { MLDBM=>q[1] }
 #	VERSION_FROM => q[Sync.pm]
 
 # --- MakeMaker post_initialize section:
@@ -47,9 +47,9 @@ AR_STATIC_ARGS = cr
 NAME = MLDBM::Sync
 DISTNAME = MLDBM-Sync
 NAME_SYM = MLDBM_Sync
-VERSION = 0.27
-VERSION_SYM = 0_27
-XS_VERSION = 0.27
+VERSION = 0.30
+VERSION_SYM = 0_30
+XS_VERSION = 0.30
 INST_BIN = blib/bin
 INST_EXE = blib/script
 INST_LIB = blib/lib
@@ -657,7 +657,7 @@ testdb_static :: testdb_dynamic
 # --- MakeMaker ppd section:
 # Creates a PPD (Perl Package Description) for a binary distribution.
 ppd:
-	@$(PERL) -e "print qq{<SOFTPKG NAME=\"MLDBM-Sync\" VERSION=\"0,27,0,0\">\n}. qq{\t<TITLE>MLDBM-Sync</TITLE>\n}. qq{\t<ABSTRACT></ABSTRACT>\n}. qq{\t<AUTHOR></AUTHOR>\n}. qq{\t<IMPLEMENTATION>\n}. qq{\t\t<OS NAME=\"$(OSNAME)\" />\n}. qq{\t\t<ARCHITECTURE NAME=\"i686-linux\" />\n}. qq{\t\t<CODEBASE HREF=\"\" />\n}. qq{\t</IMPLEMENTATION>\n}. qq{</SOFTPKG>\n}" > MLDBM-Sync.ppd
+	@$(PERL) -e "print qq{<SOFTPKG NAME=\"MLDBM-Sync\" VERSION=\"0,30,0,0\">\n}. qq{\t<TITLE>MLDBM-Sync</TITLE>\n}. qq{\t<ABSTRACT></ABSTRACT>\n}. qq{\t<AUTHOR></AUTHOR>\n}. qq{\t<IMPLEMENTATION>\n}. qq{\t\t<DEPENDENCY NAME=\"MLDBM\" VERSION=\"1,0,0,0\" />\n}. qq{\t\t<OS NAME=\"$(OSNAME)\" />\n}. qq{\t\t<ARCHITECTURE NAME=\"i686-linux\" />\n}. qq{\t\t<CODEBASE HREF=\"\" />\n}. qq{\t</IMPLEMENTATION>\n}. qq{</SOFTPKG>\n}" > MLDBM-Sync.ppd
 
 # --- MakeMaker pm_to_blib section:
 

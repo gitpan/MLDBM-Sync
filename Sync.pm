@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = 0.27;
+$VERSION = '0.30';
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;

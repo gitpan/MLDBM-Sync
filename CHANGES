@@ -1,3 +1,7 @@
+$MODULE = "MLDBM::Sync"; $VERSION = '.30'; $DATE = '2002/07/03';
+
++ Added MLDBM to the list of PREREQ_PM modules for better CPAN installation
+
 $MODULE = "MLDBM::Sync"; $VERSION = .27; $DATE = '2002/06/23';
 
 + Added note to error for Lock upgrade during ReadLock
