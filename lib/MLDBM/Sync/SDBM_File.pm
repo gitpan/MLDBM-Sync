@@ -1,6 +1,6 @@
 
 package MLDBM::Sync::SDBM_File;
-$VERSION = .11;
+$VERSION = .17;
 
 use SDBM_File;
 use strict;
@@ -18,7 +18,7 @@ sub FETCH {
     my $segment_length = $MaxSegmentLength;
 
     my $total_rv;
-    for my $index (0..($MaxSegments)) {
+    for(my $index = 0; $index < $MaxSegments; $index++) {
 	my $rv = $self->SUPER::FETCH(_index_key($key, $index));
 	if(defined $rv) {
 	    $total_rv ||= '';
@@ -50,7 +50,7 @@ sub STORE {
     my $segment_length = $MaxSegmentLength;
 
     # DELETE KEYS FIRST
-    for my $index (0..($MaxSegments-1)) {
+    for(my $index = 0; $index < $MaxSegments; $index++) {
 	my $index_key = _index_key($key, $index);
 	my $rv = $self->SUPER::FETCH($index_key);
 	if(defined $rv) {
@@ -66,8 +66,9 @@ sub STORE {
     #
     my $old_value = $value;
     $value = ($Zlib && (length($value) >= $segment_length/2)) ? "G}".compress($value) : "N}".$value;
+
     my($total_rv, $last_index);
-    for my $index (0..($MaxSegments)) {
+    for(my $index = 0; $index < $MaxSegments; $index++) {
 	if($index == $MaxSegments) {
 	    die("can't store more than $MaxSegments segments of $MaxSegmentLength bytes per key in ".__PACKAGE__);
 	}
@@ -93,7 +94,7 @@ sub DELETE {
     my $segment_length = $MaxSegmentLength;
 
     my $total_rv;
-    for my $index (0..($MaxSegments-1)) {
+    for(my $index = 0; $index < $MaxSegments; $index++) {
 	my $index_key = _index_key($key, $index);
 	my $rv = $self->SUPER::FETCH($index_key) || '';
 	$self->SUPER::DELETE($index_key);

@@ -28,6 +28,7 @@ $sync->UnLock;
 $sync->ReadLock;
 for my $key (keys %keys) {
     $t->eok($keys{$key} eq $db{$key}, "can't fetch right value for key $key");
+    $t->eok(exists $keys{$key}, "can't exists for key $key in ReadLock() section");
 }
 $sync->UnLock;
 

@@ -1,4 +1,14 @@
-$MODULE = "MLDBM::Sync"; $VERSION = .15; $DATE = 'TBA';
+$MODULE = "MLDBM::Sync"; $VERSION = .17; $DATE = '2001/10/11';
+
+- Make EXISTS safe after explicity tied hash ReadLock()
+
+- For loops in MLDBM::Sync::SDBM_File that are friendlier 
+  to perl5.004_04
+
+- Better Lock() return value, whether or not a lock has
+  previously been acquired
+
+$MODULE = "MLDBM::Sync"; $VERSION = .15; $DATE = '2001/09/21';
 
 - API fixes for easier integration with Apache::ASP
 

@@ -1,6 +1,6 @@
 
 package MLDBM::Sync;
-$VERSION = .15;
+$VERSION = .17;
 
 use MLDBM;
 use MLDBM::Sync::SDBM_File;
@@ -73,16 +73,18 @@ sub AUTOLOAD {
     }
 
     my $rv;
-    if ($func eq 'FETCH') {
+    if ($func eq 'FETCH' or $func eq 'EXISTS') {
 	$self->read_lock;
     } else {
 	$self->lock;
     }
+
     if (defined $value) {
 	$rv = $self->{dbm}->$func($key, $value);
     } else {
 	$rv = $self->{dbm}->$func($key);
     }
+
     $self->unlock;
 
     # do after lock critical section, no point taking 
@@ -229,6 +231,7 @@ sub Lock {
 		    "this could also happen if you tried to write to the MLDBM ".
 		    "in a critical section locked by ReadLock()");
 	}
+	1;
     }
 }
 
